@@ -1,0 +1,1 @@
+Using publicly available datasets from Statistics NL and RIVM Statline NL we create an overview of all neighbourhoods in the NL. We rank them by health status and analyse the 10 most healthy - and the 10 least healthy neighbourhoods' characteristics.
