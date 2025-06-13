@@ -1,0 +1,171 @@
+---
+title: "Kaarten koppelen"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+```{r setup_environment}
+options(stringsAsFactors = FALSE)
+library(tidyverse)
+library(sf)
+```
+
+# Kaart inlezen
+
+```{r inlezen}
+buurten_2020 <- readRDS("Datasets/WijkBuurtkaart_2020.rds")
+```
+
+
+```{r stress_depressie}
+GezondheidStress2020 <- read.csv2("Datasets/ErvarenGezondheid_Stress_PsychischeKlachten.csv")
+GezondheidStress2020$ID <- NULL
+GezondheidStress2020$Leeftijd <- NULL
+GezondheidStress2020$Perioden <- NULL
+GezondheidStress2020$WijkenEnBuurten <- NULL
+GezondheidStress2020$PsychischeKlachten_20 <- NULL
+
+Leefbarometer2020 <- read.csv("Datasets/Leefbaarometer-scores buurten 2002-2022.csv") %>% filter(jaar == "2020")
+Leefbarometer2020$versie <- NULL
+Leefbarometer2020$jaar <- NULL
+```
+
+# Koppel leefbarometer aan buurtstatistiek
+
+```{r leefbarometer}
+Leefbarometer2020$buurtcode <- Leefbarometer2020$bu_code
+Leefbarometer2020$bu_code <- NULL
+Leefbarometer2020$bu_naam <- NULL
+
+buurten <- buurten_2020 %>% merge(Leefbarometer2020,
+  by = "buurtcode",
+  all.x = TRUE,
+  all.y = FALSE
+)
+```
+
+# Koppel ervaren gezondheid aan buurtstatistiek
+
+```{r clean_up}
+GezondheidStress2020$buurtcode <- GezondheidStress2020$Codering_3
+GezondheidStress2020$Codering_3 <- NULL
+
+GezondheidStress2020 <- GezondheidStress2020 %>%
+  filter(
+    Marges == "MW00000"
+  )
+GezondheidStress2020$buurtcode <-
+  trimws(
+    GezondheidStress2020$buurtcode
+  )
+
+buurtenStress <- buurten %>% merge(GezondheidStress2020,
+  by = "buurtcode",
+  all.x = TRUE,
+  all.y = FALSE
+)
+
+buurtenStress <- buurtenStress %>% filter(meest_voorkomende_postcode > 1)
+buurtenStress$geometry <- NULL
+write_rds(buurtenStress, "Datasets/buurten_2020.rds")
+write_csv2(buurtenStress, "Datasets/buurten_2020.csv")
+```
+
+# Koppel lichamelijke gezondheid (RIVM open data) aan buurtstatistiek
+
+```{r lichamelijke_gezondheid}
+LichamelijkeGezondheid2020 <- read.csv2("Datasets/50090NED_UntypedDataSet_22072024_163559.csv")
+LichamelijkeGezondheid2020$buurtcode <- LichamelijkeGezondheid2020$Codering_3
+LichamelijkeGezondheid2020$ID <- NULL
+LichamelijkeGezondheid2020$Leeftijd <- NULL
+LichamelijkeGezondheid2020$Marges <- NULL
+LichamelijkeGezondheid2020$WijkenEnBuurten <- NULL
+LichamelijkeGezondheid2020$Perioden <- NULL
+LichamelijkeGezondheid2020$SoortRegio_2 <- NULL
+LichamelijkeGezondheid2020$Codering_3 <- NULL
+
+LichamelijkeGezondheid2020$buurtcode <- trimws(
+  LichamelijkeGezondheid2020$buurtcode
+)
+
+buurtenStress <- buurtenStress %>% merge(LichamelijkeGezondheid2020,
+  by = "buurtcode",
+  all.x = TRUE,
+  all.y = FALSE
+)
+
+buurtenStress$geometry <- NULL
+
+buurtenStress <- buurtenStress %>%
+  rename(
+    SocialeSamenhang = soc,
+    Leefbarometer = lbm,
+    FysiekeOmgeving = fys,
+    OverlastOnveiligheid = onv,
+    Voorzieningen = vrz,
+    Woningvoorraad = won
+  )
+buurtenStress$Marges <- NULL
+buurtenStress$SocialeSamenhang <- buurtenStress$SocialeSamenhang %>% as.numeric()
+```
+
+
+```{r eenzaamheid}
+Gezondheidsmonitor2020 <- read.csv(
+  "Datasets/50120NED_UntypedDataSet_14062024_143003.csv",
+  sep = ";"
+)
+
+Gezondheidsmonitor2020$buurtcode <- Gezondheidsmonitor2020$WijkenEnBuurten
+Gezondheidsmonitor2020$buurtcode <- trimws(
+  Gezondheidsmonitor2020$buurtcode
+)
+Gezondheidsmonitor2020$ID <- NULL
+Gezondheidsmonitor2020$Leeftijd <- NULL
+Gezondheidsmonitor2020$Marges <- NULL
+Gezondheidsmonitor2020$Perioden <- NULL
+Gezondheidsmonitor2020$WijkenEnBuurten <- NULL
+
+buurtenStress <- buurtenStress %>% merge(Gezondheidsmonitor2020,
+  by = "buurtcode",
+  all.x = TRUE,
+  all.y = FALSE
+)
+
+buurtenStress$VoldoetAanAlcoholRichtlijn_12 <- buurtenStress$VoldoetAanAlcoholRichtlijn_12 %>% as.numeric()
+buurtenStress$ErnstigZeerErnstigEenzaam_28 <- buurtenStress$ErnstigZeerErnstigEenzaam_28 %>% as.numeric()
+buurtenStress$VoldoetAanAlcoholRichtlijn_12 <- buurtenStress$VoldoetAanAlcoholRichtlijn_12 %>% as.numeric()
+
+write_rds(buurtenStress, "Datasets/buurten_2020.rds")
+write_csv2(buurtenStress, "Datasets/buurten_2020.csv")
+```
+
+
+```{r eval=FALSE, include=FALSE}
+buurtenStress %>%
+  filter(str_detect(buurtnaam, "Duttendel") |
+    str_detect(buurtnaam, "Duinzigt") |
+    str_detect(buurtnaam, "Angerenstein") |
+    str_detect(buurtnaam, "Uilennest") |
+    str_detect(buurtnaam, "Arendsdorp") |
+    str_detect(buurtnaam, "Essesteijn / Tuinen") |
+    str_detect(buurtnaam, "Prinsenhof laag") |
+    (str_detect(buurtnaam, "Vogelwijk") & gemeentenaam == "Leiden") |
+    str_detect(buurtnaam, "Kwakkenberg") |
+    (str_detect(buurtnaam, "Burgemeesterswijk") & gemeentenaam == "Leiden")) %>%
+  select(c(buurtnaam, gemeentenaam, Leefbarometer, afw, SocialeSamenhang, OverlastOnveiligheid, Voorzieningen, FysiekeOmgeving))
+
+buurtenStress %>%
+  filter(str_detect(buurtnaam, "Holendrecht West") |
+    str_detect(buurtnaam, "Afrikaanderwijk") |
+    str_detect(buurtnaam, "Middelgraaflaan") |
+    str_detect(buurtnaam, "Maarsstee") |
+    str_detect(buurtnaam, "Transvaalkwartier-Noord") |
+    (str_detect(buurtnaam, "Immerloo II") & gemeentenaam == "Arnhem") |
+    (str_detect(buurtnaam, "Schilder") & gemeentenaam == "'s-Gravenhage") |
+    str_detect(buurtnaam, "Kersenboogerd-Zuid - Buurt 33 01")) %>%
+  select(c(buurtnaam, gemeentenaam, Leefbarometer, afw, SocialeSamenhang, OverlastOnveiligheid, Voorzieningen, FysiekeOmgeving))
+```
+
+
